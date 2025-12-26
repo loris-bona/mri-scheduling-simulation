@@ -1,2 +1,3 @@
 # mri-scheduling-simulation
-Statistical analysis and discrete-event simulation of MRI scheduling policies
+This repository contains the code for the Computational Research Skills
+case study on MRI scheduling.
