@@ -948,3 +948,175 @@ type2_duration_ci <- ci_tbl_minutes
 type2_slot_summary <- slot_summary
 
 
+
+# ============================================================
+# MONTE CARLO STUDY (Part 1 add-on)
+# Robustness of Type 2 duration estimators + bootstrap CIs
+# ============================================================
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(purrr)
+  library(tibble)
+})
+
+set.seed(123)
+
+# --- Inputs from your data (Type 2 durations in HOURS) ---
+type2_dur <- df %>% filter(PatientType == "Type 2") %>% pull(Duration)
+n <- length(type2_dur)
+
+m_data <- mean(type2_dur)
+v_data <- var(type2_dur)
+
+# Quantities you care about (match Part 1)
+q_levels <- c(0.90, 0.95)
+slot_lengths <- c(0.8, 0.9)   # hours (48 and 54 minutes)
+
+# Bootstrap settings
+B_boot <- 400   # per Monte Carlo replicate (keep moderate for speed)
+R <- 400        # Monte Carlo replicates (increase if you want)
+
+# --- Helper: compute plug-in estimates on a sample y ---
+plugin_estimates <- function(y) {
+  c(
+    mean = mean(y),
+    q90  = as.numeric(quantile(y, 0.90)),
+    q95  = as.numeric(quantile(y, 0.95)),
+    P_gt_0.8 = mean(y > 0.8),
+    P_gt_0.9 = mean(y > 0.9)
+  )
+}
+
+# --- Helper: bootstrap percentile CI for plug-in quantities ---
+bootstrap_ci <- function(y, B = 400, alpha = 0.05) {
+  n <- length(y)
+  boot_stats <- replicate(B, {
+    yb <- sample(y, size = n, replace = TRUE)
+    plugin_estimates(yb)
+  })
+  boot_stats <- t(boot_stats)
+  
+  est <- plugin_estimates(y)
+  low <- apply(boot_stats, 2, quantile, probs = alpha/2)
+  high <- apply(boot_stats, 2, quantile, probs = 1 - alpha/2)
+  
+  list(est = est, low = low, high = high)
+}
+
+# ============================================================
+# Scenario parameter calibration (match mean/variance of data)
+# 1) Lognormal
+s2_logn <- log(1 + v_data / (m_data^2))
+s_logn <- sqrt(s2_logn)
+mu_logn <- log(m_data) - 0.5 * s2_logn
+
+r_lognormal <- function(n) rlnorm(n, meanlog = mu_logn, sdlog = s_logn)
+
+# 2) Gamma
+shape_g <- (m_data^2) / v_data
+scale_g <- v_data / m_data
+
+r_gamma <- function(n) rgamma(n, shape = shape_g, scale = scale_g)
+
+# 3) Weibull
+weibull_mom_fit <- function(target_mean, target_var) {
+  obj <- function(par) {
+    k <- par[1]; lam <- par[2]
+    if (k <= 0.1 || lam <= 0) return(1e9)
+    m <- lam * gamma(1 + 1/k)
+    v <- lam^2 * (gamma(1 + 2/k) - gamma(1 + 1/k)^2)
+    (m - target_mean)^2 + (v - target_var)^2
+  }
+  fit <- optim(par = c(2, target_mean), fn = obj, method = "Nelder-Mead")
+  list(shape = fit$par[1], scale = fit$par[2])
+}
+
+wb <- weibull_mom_fit(m_data, v_data)
+r_weibull <- function(n) rweibull(n, shape = wb$shape, scale = wb$scale)
+
+truth_logn <- function() c(
+  mean = m_data,
+  q90 = qlnorm(0.90, mu_logn, s_logn),
+  q95 = qlnorm(0.95, mu_logn, s_logn),
+  P_gt_0.8 = 1 - plnorm(0.8, mu_logn, s_logn),
+  P_gt_0.9 = 1 - plnorm(0.9, mu_logn, s_logn)
+)
+
+truth_gamma <- function() c(
+  mean = m_data,
+  q90 = qgamma(0.90, shape = shape_g, scale = scale_g),
+  q95 = qgamma(0.95, shape = shape_g, scale = scale_g),
+  P_gt_0.8 = 1 - pgamma(0.8, shape = shape_g, scale = scale_g),
+  P_gt_0.9 = 1 - pgamma(0.9, shape = shape_g, scale = scale_g)
+)
+
+truth_weib <- function() c(
+  mean = wb$scale * gamma(1 + 1/wb$shape),
+  q90 = qweibull(0.90, shape = wb$shape, scale = wb$scale),
+  q95 = qweibull(0.95, shape = wb$shape, scale = wb$scale),
+  P_gt_0.8 = 1 - pweibull(0.8, shape = wb$shape, scale = wb$scale),
+  P_gt_0.9 = 1 - pweibull(0.9, shape = wb$shape, scale = wb$scale)
+)
+
+scenarios <- list(
+  Lognormal = list(r = r_lognormal, truth = truth_logn),
+  Gamma     = list(r = r_gamma,     truth = truth_gamma),
+  Weibull   = list(r = r_weibull,   truth = truth_weib)
+)
+
+run_mc <- function(rfun, truth_fun, R = 400) {
+  qnames <- names(plugin_estimates(type2_dur))
+
+  truth <- truth_fun()
+  truth <- truth[qnames]
+  
+  if (any(is.na(truth))) {
+    missing <- qnames[is.na(truth)]
+    stop("Truth function is missing these quantities: ", paste(missing, collapse = ", "))
+  }
+  
+  results <- replicate(R, {
+    y <- rfun(n)
+    out <- bootstrap_ci(y, B = B_boot, alpha = 0.05)
+
+    est  <- out$est[qnames]
+    low  <- out$low[qnames]
+    high <- out$high[qnames]
+    
+    c(
+      est,
+      setNames(low,  paste0("low.",  qnames)),
+      setNames(high, paste0("high.", qnames))
+    )
+  })
+  
+  results <- as_tibble(t(results))
+  
+  metrics <- map_dfr(qnames, function(q) {
+    est  <- results[[q]]
+    low  <- results[[paste0("low.", q)]]
+    high <- results[[paste0("high.", q)]]
+    tru  <- as.numeric(truth[q])
+    
+    tibble(
+      quantity = q,
+      truth = tru,
+      bias = mean(est - tru),
+      rmse = sqrt(mean((est - tru)^2)),
+      coverage_95 = mean(low <= tru & tru <= high)
+    )
+  })
+  
+  metrics
+}
+
+mc_summary <- imap_dfr(scenarios, function(sc, sc_name) {
+  m <- run_mc(sc$r, sc$truth, R = R)
+  m$scenario <- sc_name
+  m
+}) %>%
+  select(scenario, quantity, truth, bias, rmse, coverage_95) %>%
+  arrange(quantity, scenario)
+
+print(mc_summary)
