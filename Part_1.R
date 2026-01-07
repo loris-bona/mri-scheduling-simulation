@@ -1071,3 +1071,4 @@ mc_summary <- imap_dfr(scenarios, function(sc, sc_name) {
   arrange(quantity, scenario)
 
 print(mc_summary)
+
