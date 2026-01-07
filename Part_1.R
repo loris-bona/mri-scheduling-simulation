@@ -1,7 +1,5 @@
-# ============================================================
-# PART 1 — Statistical analysis of ScanRecords.csv
-# -----------------------------
-# SECTION 0 — Setup
+# PART 1 — Statistical analysis
+# -------- SECTION 0 — Setup --------
 suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
@@ -19,8 +17,7 @@ DATA_PATH <- "ScanRecords.csv"
 WORK_START <- 8
 WORK_END   <- 17
 
-# -----------------------------
-# SECTION 0.1 — Helper functions
+# -------- SECTION 0.1 — Helper functions --------
 
 decimal_hours_to_hms <- function(x) {
   x <- as.numeric(x)
@@ -118,8 +115,7 @@ biz_diff_hours <- function(start_dt, end_dt, work_start = 8, work_end = 17) {
   total
 }
 
-# -----------------------------
-# SECTION 0.2 — Load + basic cleaning
+# -------- SECTION 0.2 — Load + basic cleaning --------
 
 raw <- read_csv(DATA_PATH, show_col_types = FALSE)
 
@@ -148,8 +144,7 @@ message("Date range: ", min(as.Date(df$CallDateTime)), " to ", max(as.Date(df$Ca
 range(hour(df$CallDateTime) + minute(df$CallDateTime)/60) |> print()
 table(wday(df$CallDateTime, week_start = 1) > 5) |> print()
 
-# -----------------------------
-# SECTION 1 — Daily arrivals (EDA for both types)
+# -------- SECTION 1 — Daily arrivals (EDA for both types) --------
 
 daily_arrivals <- df %>%
   mutate(Date = as.Date(CallDateTime)) %>%
@@ -208,8 +203,7 @@ p_arrivals_hist <- ggplot(daily_arrivals, aes(x = arrivals)) +
 
 print(p_arrivals_hist)
 
-# -----------------------------
-# SECTION 1.1 — Scan durations (EDA for both types)
+# -------- SECTION 1.1 — Scan durations (EDA for both types) --------
 
 dur_summary <- df %>%
   group_by(PatientType) %>%
@@ -250,8 +244,7 @@ p_qq <- df %>%
 
 print(p_qq)
 
-# -----------------------------
-# SECTION 1.2 — OPTIONAL diagnostic:
+# -------- SECTION 1.2 — OPTIONAL diagnostic: --------
 # Interarrival times (working-time only)
 # Why optional?
 #  - Part 1 does not require interarrival-time analysis.
@@ -275,7 +268,7 @@ interarrival_df <- df %>%
 interarrival_non_na <- interarrival_df %>%
   filter(!is.na(interarrival_hours))
 
-# Quick numeric summaries (optional)
+# Quick numeric summaries
 interarrival_summary <- interarrival_non_na %>%
   group_by(PatientType) %>%
   summarise(
@@ -302,12 +295,9 @@ p_interarrival <- ggplot(interarrival_non_na, aes(x = interarrival_hours)) +
 
 print(p_interarrival)
 
-# -----------------------------
-# SECTION 2 — Type 1 arrivals: Poisson fit + parametric bootstrap CIs
+# -------- SECTION 2 — Type 1 arrivals: Poisson fit + parametric bootstrap CIs --------
 
-# -----------------------------
 # SECTION 2.0 — Extract Type 1 daily arrivals
-
 type1_daily <- daily_arrivals %>%
   filter(PatientType == "Type 1") %>%
   arrange(Date)
@@ -320,14 +310,12 @@ n_days <- length(x)
 message("Type 1: number of workdays = ", n_days)
 message("Type 1: total arrivals = ", sum(x))
 
-# -----------------------------
-# SECTION 2.1 — Point estimate for lambda (MLE)
+# -------- SECTION 2.1 — Point estimate for lambda (MLE) --------
 lambda_hat <- mean(x)
 
 message("Type 1: lambda_hat (mean arrivals/day) = ", round(lambda_hat, 3))
 
-# -----------------------------
-# SECTION 2.2 — Management-friendly quantities (point estimates)
+# -------- SECTION 2.2 — Management-friendly quantities (point estimates) --------
 busy_thresholds <- c(18, 20, 23)  # e.g., "more than 20 patients/day"
 q_levels <- c(0.90, 0.95, 0.99)
 
@@ -346,8 +334,7 @@ type1_arrivals_point <- tibble(
 
 print(type1_arrivals_point)
 
-# -----------------------------
-# SECTION 2.3 — Parametric bootstrap for uncertainty
+# -------- SECTION 2.3 — Parametric bootstrap for uncertainty --------
 B <- 5000 
 
 set.seed(123)
@@ -373,8 +360,7 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -----------------------------
-# SECTION 2.4 — Build 95% bootstrap confidence intervals
+# -------- SECTION 2.4 — Build 95% bootstrap confidence intervals --------
 ci_level <- 0.95
 alpha <- 1 - ci_level
 
@@ -403,8 +389,7 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -----------------------------
-# SECTION 2.5 — Better formatting (optional but recommended for report)
+# -------- SECTION 2.5 — Better formatting --------
 
 ci_tbl_pretty <- ci_tbl %>%
   mutate(
@@ -421,8 +406,7 @@ ci_tbl_pretty <- ci_tbl %>%
 
 print(ci_tbl_pretty)
 
-# -----------------------------
-# SECTION 2.6 — Visual check: fitted Poisson vs empirical histogram
+# -------- SECTION 2.6 — Visual check: fitted Poisson vs empirical histogram --------
 
 emp_counts <- tibble(arrivals = x)
 
@@ -443,23 +427,19 @@ p_type1_poisson_fit <- ggplot(emp_counts, aes(x = arrivals)) +
 
 print(p_type1_poisson_fit)
 
-# -----------------------------
-# SECTION 2.7 — (Optional) Quick dispersion check (Poisson sanity)
+# -------- SECTION 2.7 — (Optional) Quick dispersion check --------
 
 dispersion_ratio <- var(x) / mean(x)
 message("Type 1: Var/Mean (dispersion ratio) = ", round(dispersion_ratio, 3))
 
-# -----------------------------
-# OUTPUTS you will reuse later (Part 2 inputs)
+# OUTPUTS you will reuse later
 type1_lambda_hat <- lambda_hat
 type1_arrivals_ci <- ci_tbl_pretty
 
 
 
-# -----------------------------
-# SECTION 3 — Type 1 scan durations:
+# -------- SECTION 3 — Type 1 scan durations: --------
 
-# -----------------------------
 # SECTION 3.0 — Extract Type 1 durations
 type1_dur <- df %>%
   filter(PatientType == "Type 1") %>%
@@ -470,16 +450,15 @@ stopifnot(length(type1_dur) > 0)
 n_scans <- length(type1_dur)
 message("Type 1: number of scans = ", n_scans)
 
-# -----------------------------
-# SECTION 3.1 — Parameter estimates (MLEs)
+
+# -------- SECTION 3.1 — Parameter estimates (MLEs) --------
 mu_hat    <- mean(type1_dur)
 sigma_hat <- sd(type1_dur)
 
 message("Type 1: mu_hat (mean duration, hours) = ", round(mu_hat, 4))
 message("Type 1: sigma_hat (sd duration, hours) = ", round(sigma_hat, 4))
 
-# -----------------------------
-# SECTION 3.2 — Management-friendly quantities (point estimates)
+# -------- SECTION 3.2 — Management-friendly quantities (point estimates) --------
 slot_lengths <- c(0.45, 0.50, 0.55, 0.60)  # ≈ 27, 30, 33, 36 minutes
 
 q_levels <- c(0.90, 0.95, 0.99)
@@ -499,8 +478,7 @@ type1_dur_point <- tibble(
 
 print(type1_dur_point)
 
-# -----------------------------
-# SECTION 3.3 — Parametric bootstrap for uncertainty
+# -------- SECTION 3.3 — Parametric bootstrap for uncertainty --------
 
 B <- 5000
 set.seed(123)
@@ -530,8 +508,8 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -----------------------------
-# SECTION 3.4 — 95% bootstrap confidence intervals
+
+# -------- SECTION 3.4 — 95% bootstrap confidence intervals --------
 ci_level <- 0.95
 alpha <- 1 - ci_level
 
@@ -564,8 +542,7 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -----------------------------
-# SECTION 3.5 — Convert to minutes (report-ready table)
+# -------- SECTION 3.5 — Convert to minutes (report-ready table) --------
 ci_tbl_minutes <- ci_tbl %>%
   mutate(
     estimate = if_else(
@@ -588,8 +565,7 @@ ci_tbl_minutes <- ci_tbl %>%
 
 print(ci_tbl_minutes)
 
-# -----------------------------
-# SECTION 3.6 — Visual diagnostics
+# -------- SECTION 3.6 — Visual diagnostics --------
 
 p_type1_dur_fit <- ggplot(tibble(Duration = type1_dur), aes(x = Duration)) +
   geom_histogram(aes(y = after_stat(density)), bins = 30, color = "white") +
@@ -624,8 +600,7 @@ p_type1_qq <- ggplot(tibble(Duration = type1_dur), aes(sample = Duration)) +
 
 print(p_type1_qq)
 
-# -----------------------------
-# SECTION 3.7 — Slot-length recommendation (interpretation helper)
+# -------- SECTION 3.7 — Slot-length recommendation (interpretation helper) --------
 slot_summary <- tibble(
   slot_length_min = slot_lengths * 60,
   prob_overrun = sapply(slot_lengths, function(L) 1 - pnorm(L, mu_hat, sigma_hat))
@@ -634,17 +609,15 @@ slot_summary <- tibble(
 
 print(slot_summary)
 
-# -----------------------------
-# OUTPUTS you will reuse later (Part 2 inputs)
+# OUTPUTS you will reuse later
 type1_mu_hat    <- mu_hat
 type1_sigma_hat <- sigma_hat
 type1_duration_ci <- ci_tbl_minutes
 type1_slot_summary <- slot_summary
 
 
-# -----------------------------
-# SECTION 4 — Type 2 arrivals:
-# -----------------------------
+# -------- SECTION 4 — Type 2 arrivals: --------
+
 # SECTION 4.0 — Extract Type 2 daily arrivals
 
 type2_daily <- daily_arrivals %>%
@@ -659,8 +632,7 @@ n_days <- length(x)
 message("Type 2: number of workdays = ", n_days)
 message("Type 2: total arrivals = ", sum(x))
 
-# -----------------------------
-# SECTION 4.1 — Plug-in point estimates (distribution-free)
+# -------- SECTION 4.1 — Plug-in point estimates (distribution-free) --------
 mean_hat <- mean(x)
 
 busy_thresholds <- c(9, 10, 11)
@@ -682,8 +654,7 @@ type2_arrivals_point <- tibble(
 
 print(type2_arrivals_point)
 
-# -----------------------------
-# SECTION 4.2 — Nonparametric bootstrap for uncertainty
+# -------- SECTION 4.2 — Nonparametric bootstrap for uncertainty --------
 
 B <- 5000
 set.seed(123)
@@ -708,8 +679,7 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -----------------------------
-# SECTION 4.3 — 95% bootstrap confidence intervals
+# -------- SECTION 4.3 — 95% bootstrap confidence intervals --------
 
 ci_level <- 0.95
 alpha <- 1 - ci_level
@@ -739,8 +709,7 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -----------------------------
-# SECTION 4.4 — Visual diagnostics (distribution-free)
+# -------- SECTION 4.4 — Visual diagnostics (distribution-free) --------
 
 p_type2_arrivals_hist <- ggplot(tibble(arrivals = x), aes(x = arrivals)) +
   geom_histogram(binwidth = 1, boundary = -0.5, color = "white") +
@@ -754,7 +723,7 @@ p_type2_arrivals_hist <- ggplot(tibble(arrivals = x), aes(x = arrivals)) +
 
 print(p_type2_arrivals_hist)
 
-# Empirical CDF (very intuitive for management)
+# Empirical CDF
 p_type2_ecdf <- ggplot(tibble(arrivals = x), aes(x = arrivals)) +
   stat_ecdf(geom = "step", linewidth = 1) +
   scale_x_continuous(breaks = seq(min(x), max(x), by = 1)) +
@@ -767,8 +736,7 @@ p_type2_ecdf <- ggplot(tibble(arrivals = x), aes(x = arrivals)) +
 
 print(p_type2_ecdf)
 
-# -----------------------------
-# SECTION 4.5 — Interpretation helper
+# -------- SECTION 4.5 — Interpretation helper --------
 
 summary_tbl <- tibble(
   arrivals_day = sort(unique(x)),
@@ -777,17 +745,14 @@ summary_tbl <- tibble(
 
 print(summary_tbl)
 
-# -----------------------------
-# OUTPUTS you will reuse later (Part 2 inputs)
+# OUTPUTS you will reuse later
 type2_mean_arrivals <- mean_hat
 type2_arrivals_ci <- ci_tbl
 type2_arrivals_ecdf <- summary_tbl
 
 
-# -----------------------------
-# SECTION 5 — Type 2 scan durations:
+# -------- SECTION 5 — Type 2 scan durations: --------
 
-# -----------------------------
 # SECTION 5.0 — Extract Type 2 durations
 
 type2_dur <- df %>%
@@ -799,8 +764,7 @@ stopifnot(length(type2_dur) > 0)
 n_scans <- length(type2_dur)
 message("Type 2: number of scans = ", n_scans)
 
-# -----------------------------
-# SECTION 5.1 — Plug-in point estimates (distribution-free)
+# -------- SECTION 5.1 — Plug-in point estimates (distribution-free) --------
 
 mean_hat <- mean(type2_dur)
 
@@ -823,8 +787,7 @@ type2_dur_point <- tibble(
 
 print(type2_dur_point)
 
-# -----------------------------
-# SECTION 5.2 — Nonparametric bootstrap for uncertainty
+# -------- SECTION 5.2 — Nonparametric bootstrap for uncertainty --------
 
 B <- 5000
 set.seed(123)
@@ -849,8 +812,7 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -----------------------------
-# SECTION 5.3 — 95% bootstrap confidence intervals
+# -------- SECTION 5.3 — 95% bootstrap confidence intervals --------
 
 ci_level <- 0.95
 alpha <- 1 - ci_level
@@ -880,8 +842,7 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -----------------------------
-# SECTION 5.4 — Convert to minutes (report-ready)
+# -------- SECTION 5.4 — Convert to minutes (report-ready) --------
 
 ci_tbl_minutes <- ci_tbl %>%
   mutate(
@@ -905,8 +866,7 @@ ci_tbl_minutes <- ci_tbl %>%
 
 print(ci_tbl_minutes)
 
-# -----------------------------
-# SECTION 5.5 — Visual diagnostics (distribution-free)
+#  -------- SECTION 5.5 — Visual diagnostics (distribution-free) --------
 
 p_type2_dur_hist <- ggplot(tibble(Duration = type2_dur), aes(x = Duration)) +
   geom_histogram(bins = 30, color = "white") +
@@ -930,8 +890,7 @@ p_type2_dur_ecdf <- ggplot(tibble(Duration = type2_dur), aes(x = Duration)) +
 
 print(p_type2_dur_ecdf)
 
-# -----------------------------
-# SECTION 5.6 — Slot-length interpretation helper
+# -------- SECTION 5.6 — Slot-length interpretation helper --------
 
 slot_summary <- tibble(
   slot_length_min = slot_lengths * 60,
@@ -941,18 +900,14 @@ slot_summary <- tibble(
 
 print(slot_summary)
 
-# -----------------------------
-# OUTPUTS you will reuse later (Part 2 inputs)
+# OUTPUTS you will reuse later
 type2_mean_duration <- mean_hat
 type2_duration_ci <- ci_tbl_minutes
 type2_slot_summary <- slot_summary
 
 
 
-# ============================================================
-# MONTE CARLO STUDY (Part 1 add-on)
-# Robustness of Type 2 duration estimators + bootstrap CIs
-# ============================================================
+# -------- MONTE CARLO STUDY --------
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -962,22 +917,20 @@ suppressPackageStartupMessages({
 
 set.seed(123)
 
-# --- Inputs from your data (Type 2 durations in HOURS) ---
 type2_dur <- df %>% filter(PatientType == "Type 2") %>% pull(Duration)
 n <- length(type2_dur)
 
 m_data <- mean(type2_dur)
 v_data <- var(type2_dur)
 
-# Quantities you care about (match Part 1)
 q_levels <- c(0.90, 0.95)
-slot_lengths <- c(0.8, 0.9)   # hours (48 and 54 minutes)
+slot_lengths <- c(0.8, 0.9)
 
 # Bootstrap settings
-B_boot <- 400   # per Monte Carlo replicate (keep moderate for speed)
-R <- 400        # Monte Carlo replicates (increase if you want)
+B_boot <- 400   
+R <- 400        
 
-# --- Helper: compute plug-in estimates on a sample y ---
+
 plugin_estimates <- function(y) {
   c(
     mean = mean(y),
@@ -988,7 +941,6 @@ plugin_estimates <- function(y) {
   )
 }
 
-# --- Helper: bootstrap percentile CI for plug-in quantities ---
 bootstrap_ci <- function(y, B = 400, alpha = 0.05) {
   n <- length(y)
   boot_stats <- replicate(B, {
@@ -1004,7 +956,6 @@ bootstrap_ci <- function(y, B = 400, alpha = 0.05) {
   list(est = est, low = low, high = high)
 }
 
-# ============================================================
 # Scenario parameter calibration (match mean/variance of data)
 # 1) Lognormal
 s2_logn <- log(1 + v_data / (m_data^2))
