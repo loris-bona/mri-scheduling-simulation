@@ -172,8 +172,6 @@ print(type1_arrivals_point)
 
 B <- 5000 
 
-set.seed(123)
-
 boot_mat <- replicate(B, {
   xb <- rpois(n_days, lambda_hat)
   lambda_b <- mean(xb)
@@ -268,7 +266,6 @@ print(type1_dur_point)
 # -------- SECTION 3.1 - Parametric bootstrap for uncertainty --------
 
 B <- 5000
-set.seed(123)
 
 boot_mat <- replicate(B, {
   yb <- rnorm(n_scans, mu_hat, sigma_hat)
@@ -442,7 +439,6 @@ print(type2_arrivals_point)
 # -------- SECTION 4.2 - Nonparametric bootstrap for uncertainty --------
 
 B <- 5000
-set.seed(123)
 
 boot_mat <- replicate(B, {
   xb <- sample(x, size = n_days, replace = TRUE)
@@ -549,7 +545,6 @@ print(type2_dur_point)
 # -------- SECTION 5.2 - Nonparametric bootstrap for uncertainty --------
 
 B <- 5000
-set.seed(123)
 
 boot_mat <- replicate(B, {
   yb <- sample(type2_dur, size = n_scans, replace = TRUE)
@@ -651,8 +646,6 @@ print(slot_summary)
 
 
 # -------- MONTE CARLO --------
-
-set.seed(123)
 
 type2_dur <- df %>% filter(PatientType == "Type 2") %>% pull(Duration)
 n <- length(type2_dur)
