@@ -795,3 +795,148 @@ mc_summary <- imap_dfr(scenarios, function(sc, sc_name) {
   arrange(quantity, scenario)
 
 print(mc_summary)
+
+  #convert hours to minutes
+  convert_to_minutes <- function(df) {
+  df %>%
+    mutate(
+      truth = if_else(str_detect(quantity, "mean|q"),
+                      truth * 60, truth),
+      bias = if_else(str_detect(quantity, "mean|q"),
+                     bias * 60, bias),
+      rmse = if_else(str_detect(quantity, "mean|q"),
+                     rmse * 60, rmse)
+    )
+}
+mc_summary_minutes <- convert_to_minutes(mc_summary)
+print(mc_summary_minutes)
+
+
+
+##type two arrivals:
+
+# Observed daily arrivals for Type 2
+type2_arr <- daily_arrivals %>%
+  filter(PatientType == "Type 2") %>%
+  pull(arrivals)
+
+n <- length(type2_arr)   # number of days (≈21)
+
+m_data <- mean(type2_arr)
+v_data <- var(type2_arr)
+
+B_boot <- 400
+R <- 400
+
+plugin_estimates_arr <- function(x) {
+  c(
+    mean = mean(x),
+    q90  = as.numeric(quantile(x, 0.90, type = 1)),
+    q95  = as.numeric(quantile(x, 0.95, type = 1)),
+    P_gt_9  = mean(x > 9),
+    P_gt_10 = mean(x > 10),
+    P_gt_11 = mean(x > 11)
+  )
+}
+
+bootstrap_ci_arr <- function(x, B = 400, alpha = 0.05) {
+  n <- length(x)
+  
+  boot_stats <- replicate(B, {
+    xb <- sample(x, size = n, replace = TRUE)
+    plugin_estimates_arr(xb)
+  })
+  boot_stats <- t(boot_stats)
+  
+  est  <- plugin_estimates_arr(x)
+  low  <- apply(boot_stats, 2, quantile, probs = alpha/2)
+  high <- apply(boot_stats, 2, quantile, probs = 1 - alpha/2)
+  
+  list(est = est, low = low, high = high)
+}
+
+# poisson:
+r_pois <- function(n) rpois(n, lambda = m_data)
+
+truth_pois <- function() c(
+  mean = m_data,
+  q90  = qpois(0.90, m_data),
+  q95  = qpois(0.95, m_data),
+  P_gt_9  = 1 - ppois(9, m_data),
+  P_gt_10 = 1 - ppois(10, m_data),
+  P_gt_11 = 1 - ppois(11, m_data)
+)
+
+
+#binomial:
+
+if (v_data >= m_data) {
+  stop("Binomial not admissible: variance ≥ mean")
+}
+
+p_bin <- 1 - v_data / m_data
+N_bin <- m_data / p_bin
+
+r_binom <- function(n) rbinom(n, size = round(N_bin), prob = p_bin)
+
+truth_binom <- function() c(
+  mean = round(N_bin) * p_bin,
+  q90  = qbinom(0.90, size = round(N_bin), prob = p_bin),
+  q95  = qbinom(0.95, size = round(N_bin), prob = p_bin),
+  P_gt_9  = 1 - pbinom(9, size = round(N_bin), prob = p_bin),
+  P_gt_10 = 1 - pbinom(10, size = round(N_bin), prob = p_bin),
+  P_gt_11 = 1 - pbinom(11, size = round(N_bin), prob = p_bin)
+)
+
+
+scenarios_arr <- list(
+  Poisson = list(r = r_pois,   truth = truth_pois),
+  Binomial = list(r = r_binom, truth = truth_binom)
+)
+
+
+run_mc_arr <- function(rfun, truth_fun, R = 400) {
+  
+  qnames <- names(plugin_estimates_arr(type2_arr))
+  
+  truth <- truth_fun()
+  truth <- truth[qnames]
+  
+  results <- replicate(R, {
+    x <- rfun(n)
+    out <- bootstrap_ci_arr(x, B = B_boot, alpha = 0.05)
+    
+    c(
+      out$est[qnames],
+      setNames(out$low[qnames],  paste0("low.", qnames)),
+      setNames(out$high[qnames], paste0("high.", qnames))
+    )
+  })
+  
+  results <- as_tibble(t(results))
+  
+  map_dfr(qnames, function(q) {
+    est  <- results[[q]]
+    low  <- results[[paste0("low.", q)]]
+    high <- results[[paste0("high.", q)]]
+    tru  <- as.numeric(truth[q])
+    
+    tibble(
+      quantity = q,
+      truth = tru,
+      bias = mean(est - tru),
+      rmse = sqrt(mean((est - tru)^2)),
+      coverage_95 = mean(low <= tru & tru <= high)
+    )
+  })
+}
+
+mc_summary_arr <- imap_dfr(scenarios_arr, function(sc, sc_name) {
+  out <- run_mc_arr(sc$r, sc$truth, R = R)
+  out$scenario <- sc_name
+  out
+}) %>%
+  select(scenario, quantity, truth, bias, rmse, coverage_95) %>%
+  arrange(quantity, scenario)
+
+print(mc_summary_arr)
