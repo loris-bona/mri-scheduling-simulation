@@ -34,7 +34,7 @@ df <- raw %>%
   ) %>%
   select(-hrs, -mins)
 
-# double check
+
 message("Rows after cleaning: ", nrow(df))
 print(df %>% count(PatientType))
 message("Date range: ", min(as.Date(df$CallDateTime)), " to ", max(as.Date(df$CallDateTime)))
@@ -98,7 +98,6 @@ p_arrivals_hist <- ggplot(daily_arrivals, aes(x = arrivals)) +
 
 print(p_arrivals_hist)
 
-# -------- SECTION 1.1 - Scan durations --------
 
 dur_summary <- df %>%
   group_by(PatientType) %>%
@@ -129,9 +128,8 @@ p_dur_hist <- ggplot(df, aes(x = Duration)) +
 print(p_dur_hist)
 
 
-# -------- SECTION 2 - Type 1 arrivals: Poisson fit + parametric bootstrap CIs --------
+# -------- SECTION 2 - Type 1 arrivals --------
 
-# SECTION 2.0 — Extract Type 1 daily arrivals
 type1_daily <- daily_arrivals %>%
   filter(PatientType == "Type 1") %>%
   arrange(Date)
@@ -168,7 +166,6 @@ type1_arrivals_point <- tibble(
 
 print(type1_arrivals_point)
 
-# -------- SECTION 2.1 - Parametric bootstrap for uncertainty --------
 
 B <- 5000 
 
@@ -193,7 +190,6 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -------- SECTION 2.2 - Build 95% bootstrap CI --------
 
 ci_level <- 0.95
 alpha <- 1 - ci_level
@@ -226,7 +222,6 @@ print(ci_tbl)
 
 # -------- SECTION 3 - Type 1 scan durations --------
 
-# SECTION 3.0 — Extract Type 1 durations
 type1_dur <- df %>%
   filter(PatientType == "Type 1") %>%
   pull(Duration)
@@ -263,7 +258,6 @@ type1_dur_point <- tibble(
 
 print(type1_dur_point)
 
-# -------- SECTION 3.1 - Parametric bootstrap for uncertainty --------
 
 B <- 5000
 
@@ -292,7 +286,6 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -------- SECTION 3.2 - 95% bootstrap CI --------
 
 ci_level <- 0.95
 alpha <- 1 - ci_level
@@ -326,7 +319,6 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -------- SECTION 3.3 — Convert to minutes --------
 
 ci_tbl_minutes <- ci_tbl %>%
   mutate(
@@ -351,7 +343,6 @@ ci_tbl_minutes <- ci_tbl %>%
 
 print(ci_tbl_minutes)
 
-# -------- SECTION 3.4 - Visual diagnostics --------
 
 p_type1_dur_fit <- ggplot(tibble(Duration = type1_dur), aes(x = Duration)) +
   geom_histogram(aes(y = after_stat(density)), bins = 30, color = "white") +
@@ -373,7 +364,7 @@ p_type1_dur_fit <- ggplot(tibble(Duration = type1_dur), aes(x = Duration)) +
 
 print(p_type1_dur_fit)
 
-# Q–Q plot
+
 p_type1_qq <- ggplot(tibble(Duration = type1_dur), aes(sample = Duration)) +
   stat_qq() +
   stat_qq_line() +
@@ -386,7 +377,6 @@ p_type1_qq <- ggplot(tibble(Duration = type1_dur), aes(sample = Duration)) +
 
 print(p_type1_qq)
 
-# -------- SECTION 3.5 - Slot-length recommendation --------
 
 slot_summary <- tibble(
   slot_length_min = slot_lengths * 60,
@@ -398,8 +388,6 @@ print(slot_summary)
 
 
 # -------- SECTION 4 - Type 2 arrivals --------
-
-# SECTION 4.0 - Extract Type 2 daily arrivals
 
 type2_daily <- daily_arrivals %>%
   filter(PatientType == "Type 2") %>%
@@ -413,7 +401,6 @@ n_days <- length(x)
 message("Type 2: number of workdays = ", n_days)
 message("Type 2: total arrivals = ", sum(x))
 
-# -------- SECTION 4.1 - Plug-in point estimates (distribution-free) --------
 
 mean_hat <- mean(x)
 
@@ -436,7 +423,6 @@ type2_arrivals_point <- tibble(
 
 print(type2_arrivals_point)
 
-# -------- SECTION 4.2 - Nonparametric bootstrap for uncertainty --------
 
 B <- 5000
 
@@ -460,7 +446,6 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -------- SECTION 4.3 - 95% bootstrap CI --------
 
 ci_level <- 0.95
 alpha <- 1 - ci_level
@@ -490,9 +475,7 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -------- SECTION 4.4 - Visual diagnostics (distribution-free) --------
 
-# Empirical CDF
 p_type2_ecdf <- ggplot(tibble(arrivals = x), aes(x = arrivals)) +
   stat_ecdf(geom = "step", linewidth = 1) +
   scale_x_continuous(breaks = seq(min(x), max(x), by = 1)) +
@@ -508,8 +491,6 @@ print(p_type2_ecdf)
 
 # -------- SECTION 5 - Type 2 scan durations --------
 
-# SECTION 5.0 — Extract Type 2 durations
-
 type2_dur <- df %>%
   filter(PatientType == "Type 2") %>%
   pull(Duration)
@@ -519,11 +500,10 @@ stopifnot(length(type2_dur) > 0)
 n_scans <- length(type2_dur)
 message("Type 2: number of scans = ", n_scans)
 
-# -------- SECTION 5.1 - Plug-in point estimates (distribution-free) --------
 
 mean_hat <- mean(type2_dur)
 
-slot_lengths <- c(0.60, 0.70, 0.80, 0.90)  # ≈ 36, 42, 48, 54 minutes
+slot_lengths <- c(0.60, 0.70, 0.80, 0.90)
 
 q_levels <- c(0.90, 0.95)
 
@@ -542,7 +522,6 @@ type2_dur_point <- tibble(
 
 print(type2_dur_point)
 
-# -------- SECTION 5.2 - Nonparametric bootstrap for uncertainty --------
 
 B <- 5000
 
@@ -566,7 +545,6 @@ colnames(boot_mat) <- c(
 
 boot_df <- as_tibble(boot_mat)
 
-# -------- SECTION 5.3 - 95% bootstrap CI --------
 
 ci_level <- 0.95
 alpha <- 1 - ci_level
@@ -596,7 +574,6 @@ ci_tbl <- tibble(
 
 print(ci_tbl)
 
-# -------- SECTION 5.4 - Convert to minutes --------
 
 ci_tbl_minutes <- ci_tbl %>%
   mutate(
@@ -621,7 +598,6 @@ ci_tbl_minutes <- ci_tbl %>%
 
 print(ci_tbl_minutes)
 
-#  -------- SECTION 5.5 - Visual diagnostics (distribution-free) --------
 
 p_type2_dur_ecdf <- ggplot(tibble(Duration = type2_dur), aes(x = Duration)) +
   stat_ecdf(geom = "step", linewidth = 1) +
@@ -634,7 +610,6 @@ p_type2_dur_ecdf <- ggplot(tibble(Duration = type2_dur), aes(x = Duration)) +
 
 print(p_type2_dur_ecdf)
 
-# -------- SECTION 5.6 - Slot-length --------
 
 slot_summary <- tibble(
   slot_length_min = slot_lengths * 60,
@@ -796,7 +771,7 @@ mc_summary <- imap_dfr(scenarios, function(sc, sc_name) {
 
 print(mc_summary)
 
-  #convert hours to minutes
+
   convert_to_minutes <- function(df) {
   df %>%
     mutate(
