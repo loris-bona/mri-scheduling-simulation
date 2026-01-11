@@ -1,4 +1,9 @@
 # PART 1: Statistical analysis
+#Team 1
+
+#set to 4 digits after .
+options(pillar.sigfig = 4)
+
 suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
@@ -42,7 +47,7 @@ range(hour(df$CallDateTime) + minute(df$CallDateTime)/60) |> print()
 table(wday(df$CallDateTime, week_start = 1) > 5) |> print()
 
 
-# -------- SECTION 1 - Daily arrivals --------
+# -------- SECTION 1 - Define data, general histograms --------
 
 daily_arrivals <- df %>%
   mutate(Date = as.Date(CallDateTime)) %>%
@@ -365,27 +370,6 @@ p_type1_dur_fit <- ggplot(tibble(Duration = type1_dur), aes(x = Duration)) +
 print(p_type1_dur_fit)
 
 
-p_type1_qq <- ggplot(tibble(Duration = type1_dur), aes(sample = Duration)) +
-  stat_qq() +
-  stat_qq_line() +
-  labs(
-    title = "Type 1 scan durations: Q–Q plot (Normal reference)",
-    x = "Theoretical quantiles",
-    y = "Sample quantiles"
-  ) +
-  theme_minimal()
-
-print(p_type1_qq)
-
-
-slot_summary <- tibble(
-  slot_length_min = slot_lengths * 60,
-  prob_overrun = sapply(slot_lengths, function(L) 1 - pnorm(L, mu_hat, sigma_hat))
-) %>%
-  mutate(prob_overrun_pct = round(100 * prob_overrun, 1))
-
-print(slot_summary)
-
 
 # -------- SECTION 4 - Type 2 arrivals --------
 
@@ -611,17 +595,10 @@ p_type2_dur_ecdf <- ggplot(tibble(Duration = type2_dur), aes(x = Duration)) +
 print(p_type2_dur_ecdf)
 
 
-slot_summary <- tibble(
-  slot_length_min = slot_lengths * 60,
-  prob_overrun = sapply(slot_lengths, function(L) mean(type2_dur > L))
-) %>%
-  mutate(prob_overrun_pct = round(100 * prob_overrun, 1))
-
-print(slot_summary)
-
 
 # -------- MONTE CARLO --------
 
+#type 2 scan durations:
 type2_dur <- df %>% filter(PatientType == "Type 2") %>% pull(Duration)
 n <- length(type2_dur)
 
@@ -656,20 +633,20 @@ bootstrap_ci <- function(y, B = 400, alpha = 0.05) {
   list(est = est, low = low, high = high)
 }
 
-# 1) Lognormal
+#1. Lognormal
 s2_logn <- log(1 + v_data / (m_data^2))
 s_logn <- sqrt(s2_logn)
 mu_logn <- log(m_data) - 0.5 * s2_logn
 
 r_lognormal <- function(n) rlnorm(n, meanlog = mu_logn, sdlog = s_logn)
 
-# 2) Gamma
+#2. Gamma
 shape_g <- (m_data^2) / v_data
 scale_g <- v_data / m_data
 
 r_gamma <- function(n) rgamma(n, shape = shape_g, scale = scale_g)
 
-# 3) Weibull
+#3. Weibull
 weibull_mom_fit <- function(target_mean, target_var) {
   obj <- function(par) {
     k <- par[1]; lam <- par[2]
@@ -788,14 +765,14 @@ print(mc_summary_minutes)
 
 
 
-##type two arrivals:
+#type two arrivals:
 
-# Observed daily arrivals for Type 2
+#daily arrivals for Type 2
 type2_arr <- daily_arrivals %>%
   filter(PatientType == "Type 2") %>%
   pull(arrivals)
 
-n <- length(type2_arr)   # number of days (≈21)
+n <- length(type2_arr)   
 
 m_data <- mean(type2_arr)
 v_data <- var(type2_arr)
@@ -830,7 +807,7 @@ bootstrap_ci_arr <- function(x, B = 400, alpha = 0.05) {
   list(est = est, low = low, high = high)
 }
 
-# poisson:
+#1. poisson:
 r_pois <- function(n) rpois(n, lambda = m_data)
 
 truth_pois <- function() c(
@@ -843,8 +820,7 @@ truth_pois <- function() c(
 )
 
 
-#binomial:
-
+#2. binomial:
 if (v_data >= m_data) {
   stop("Binomial not admissible: variance ≥ mean")
 }
